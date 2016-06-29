@@ -26,6 +26,9 @@ def test_module_args(mock_module,
                            ['clagd_enable', 'clagd_priority',
                             'clagd_peer_ip', 'clagd_sys_mac'],
                            ['clagd_enable', 'clagd_backup_ip']],
+        mutually_exclusive=[
+            ['vrf_table', 'vrf_name', 'addr_method']
+        ],
         argument_spec={
             'addr_method': {
                 'type': 'str',
@@ -54,7 +57,11 @@ def test_module_args(mock_module,
             'clagd_backup_ip': {'type': 'str'},
             'location': {'type': 'str',
                          'default': '/etc/network/interfaces.d'},
-            'speed': {'type': 'str'}}
+            'speed': {'type': 'str'},
+            'vrf_name': {'type': 'str'},
+            'vrf_table': {'type': 'str',
+                          'choices': list(map(str, range(1001, 1256))) +
+                                     ['auto']}},
     )
 
 
@@ -200,6 +207,35 @@ def test_build_speed(mock_module):
 
 
 @mock.patch('library.cl_interface.AnsibleModule')
+def test_build_vrf_name(mock_module):
+    """
+    cl_interface - test building vrf_name config
+    """
+    mock_module.custom_desired_config = {'config': {}}
+    mock_module.params = {'vrf_name': 'red'}
+    cl_int.build_vrf_name(mock_module)
+    assert_equals(mock_module.custom_desired_config,
+                  {'config': {'vrf': 'red'}})
+
+
+@mock.patch('library.cl_interface.AnsibleModule')
+def test_build_vrf_table(mock_module):
+    """
+    cl_interface - test building vrf_table config
+    """
+    mock_module.custom_desired_config = {'config': {}}
+    mock_module.params = {'vrf_table': 'auto'}
+    cl_int.build_vrf_table(mock_module)
+    assert_equals(mock_module.custom_desired_config,
+                  {'config': {'vrf-table': 'auto'}})
+    mock_module.custom_desired_config = {'config': {}}
+    mock_module.params = {'vrf_table': '1001'}
+    cl_int.build_vrf_table(mock_module)
+    assert_equals(mock_module.custom_desired_config,
+                  {'config': {'vrf-table': '1001'}})
+
+
+@mock.patch('library.cl_interface.AnsibleModule')
 def test_build_generic_attr(mock_module):
     """
     cl_interface - adding values from module parameters that match
@@ -300,6 +336,7 @@ def test_replace_config_ifquery_not_outputting_text(mock_run_cmd, mock_module):
     cl_int.replace_config(mock_module)
     _msg='desired_config not copied into ifupdown2 text format. Not writing config to file'
     mock_module.fail_json.assert_called_with(msg=_msg)
+
 
 @mock.patch('library.cl_interface.AnsibleModule')
 @mock.patch('library.cl_interface.run_cmd')

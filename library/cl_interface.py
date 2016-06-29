@@ -55,7 +55,6 @@ options:
     mtu:
         description:
             - set MTU. Configure Jumbo Frame by setting MTU to 9000.
-
     virtual_ip:
         description:
             - define IPv4 virtual IP used by the Cumulus VRR feature
@@ -65,6 +64,12 @@ options:
     vids:
         description:
             - in vlan aware mode, lists vlans defined under the interface
+    vrf_name:
+        description:
+            - define vrf name to assosiate with the interface
+    vrf_table:
+        description:
+            - assign a table ID number for the VRF table
     mstpctl_bpduguard:
         description:
             - Enables BPDU Guard on a port in vlan-aware mode
@@ -120,6 +125,8 @@ notes:
 
 EXAMPLES = '''
 # Options ['virtual_mac', 'virtual_ip'] are required together
+# Options ['vrf_table', 'vrf_name', 'addr_method'] are mutually exclusive
+
 # configure a front panel port with an IP
 cl_interface: name=swp1  ipv4=10.1.1.1/24
 notify: reload networking
@@ -135,6 +142,15 @@ notify: reload networking
 # configure subinterface with an IP
 cl_interface: name=bond0.100  alias_name='my bond' ipv4=10.1.1.1/24
 notify: reload networking
+
+# configure a VRF
+cl_interface: name=red vrf_table=auto
+notify: reload networking
+
+# assign interface to a VRF
+cl_interface: name=swp1 vrf_name=red
+notify: reload networking
+
 
 # define cl_interfaces once in tasks
 # then write intefaces in variables file
@@ -155,6 +171,8 @@ cl_interface:
   vids: "{{ item.value.vids|default(omit) }}"
   virtual_ip: "{{ item.value.virtual_ip|default(omit) }}"
   virtual_mac: "{{ item.value.virtual_mac|default(omit) }}"
+  vrf_name: "{{ item.value.vrf_name|default(omit) }}"
+  vrf_table: "{{ item.value.vrf_table|default(omit) }}"
   mstpctl_portnetwork: "{{ item.value.mstpctl_portnetwork|default('no') }}"
   mstpctl_portadminedge: "{{ item.value.mstpctl_portadminedge|default('no') }}"
   mstpctl_bpduguard: "{{ item.value.mstpctl_bpduguard|default('no') }}"
@@ -293,6 +311,18 @@ def build_vrr(module):
             ' '.join(vrr_config)
 
 
+def build_vrf_table(module):
+    _vrf_table = module.params.get('vrf_table')
+    if _vrf_table:
+        module.custom_desired_config['config']['vrf-table'] = _vrf_table
+
+
+def build_vrf_name(module):
+    _vrf_name = module.params.get('vrf_name')
+    if _vrf_name:
+        module.custom_desired_config['config']['vrf'] = _vrf_name
+
+
 def build_desired_iface_config(module):
     """
     take parameters defined and build ifupdown2 compatible hash
@@ -311,9 +341,11 @@ def build_desired_iface_config(module):
     build_speed(module)
     build_alias_name(module)
     build_vrr(module)
+    build_vrf_name(module)
+    build_vrf_table(module)
     for _attr in ['mtu', 'mstpctl_portnetwork', 'mstpctl_portadminedge',
                   'mstpctl_bpduguard', 'clagd_enable',
-                  'clagd_priority', 'clagd_peer_ip','clagd_backup_ip',
+                  'clagd_priority', 'clagd_peer_ip', 'clagd_backup_ip',
                   'clagd_sys_mac', 'clagd_args']:
         build_generic_attr(module, _attr)
 
@@ -393,13 +425,20 @@ def main():
             clagd_sys_mac=dict(type='str'),
             clagd_args=dict(type='str'),
             location=dict(type='str',
-                          default='/etc/network/interfaces.d')
+                          default='/etc/network/interfaces.d'),
+            vrf_name=dict(type='str'),
+            vrf_table=dict(type='str',
+                           choices=list(map(str, range(1001, 1256))) + ['auto']
+                           ),
         ),
         required_together=[
             ['virtual_ip', 'virtual_mac'],
             ['clagd_enable', 'clagd_priority',
              'clagd_peer_ip', 'clagd_sys_mac'],
             ['clagd_enable', 'clagd_backup_ip']
+        ],
+        mutually_exclusive=[
+            ['vrf_table', 'vrf_name', 'addr_method']
         ]
     )
 
