@@ -145,7 +145,7 @@ def test_build_address(mock_module):
     mock_module.params = {'ipv4': ['1.1.1.1/24'], 'ipv6': ['2001:db8:abcd::/48']}
     cl_int.build_address(mock_module)
     assert_equals(mock_module.custom_desired_config,
-                  {'config': {'address': '1.1.1.1/24 2001:db8:abcd::/48'}})
+                  {'config': {'address': ['1.1.1.1/24', '2001:db8:abcd::/48']}})
 
 
 @mock.patch('library.cl_interface.AnsibleModule')
